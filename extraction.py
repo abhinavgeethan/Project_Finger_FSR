@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 root="P_1"
 idx='2'
 
-stim=pd.read_csv(f"{root}/stim{idx}.txt",header=None)
-time=pd.read_csv(f"{root}/timestamp{idx}.txt",header=None)
+stim=pd.read_csv(f"data/{root}/stim{idx}.txt",header=None)
+time=pd.read_csv(f"data/{root}/timestamp{idx}.txt",header=None)
 print("Loaded")
 pulse_duration=None
 pulse_amp=1.0
