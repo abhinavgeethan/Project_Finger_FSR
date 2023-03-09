@@ -1,4 +1,4 @@
-from extraction_util import get_mins, get_min, get_datapoints, make_dataset
+from extraction_util import get_mins, get_min, get_datapoints, get_datapoints_with_ffls, make_dataset, make_dataset_with_ffls
 
 data_dict=[
     {
@@ -46,11 +46,11 @@ mins=get_mins(data_dict)
 max_length=get_min(mins)
 print(f"Clipping to {max_length} samples")
 print("Collecting Datapoints")
-datapoints=get_datapoints(data_dict,max_length)
+datapoints=get_datapoints_with_ffls(data_dict,max_length)
 print(f"Number of Datapoints:{len(datapoints)}")
 print("Generating Dataset")
-dataset=make_dataset(datapoints)
+dataset=make_dataset_with_ffls(datapoints)
 print(dataset.info())
 print(dataset.head())
-dataset.to_csv("dataset.csv")
-print("Saved to dataset.csv")
+dataset.to_csv("dataset_with_ffls.csv")
+print("Saved to dataset_with_ffls.csv")
