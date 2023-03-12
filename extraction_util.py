@@ -140,10 +140,10 @@ def make_dataset(datapoints:[pd.DataFrame])->pd.DataFrame:
     processed_datadicts=[]
     for data in datapoints:
         stim=data['Stim'][0]
-        array_2D=data.loc[:,['FSR1','FSR2','FSR3','FSR4','FSR5','FSR6','FSR7','FSR8','FSR9','FSR10']].to_numpy()
+        array_2D=data.loc[:,['FSR1','FSR2','FSR3','FSR4','FSR5','FSR6','FSR7','FSR8','FSR9','FSR10']].to_numpy().flatten().tolist()
         processed_datadicts.append({
             'stim':stim,
-            'data':array_2D
+            'data':' '.join(str(x) for x in array_2D)
         })
     dataset=pd.DataFrame(processed_datadicts)
     return dataset
