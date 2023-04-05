@@ -48,7 +48,7 @@ def get_datapoints(data_dict:[{'root':str,'idx':[str]}],max_length=311):
             good_stim=stim.iloc[:,:7]
             good_stim.columns=['key','Fing1','Fing2','Fing3','Fing4','Fing5','Fing6']
             
-            emg=pd.read_csv(f"data/{root}/emg{idx}.txt",header=None)
+            emg=pd.read_csv(f"data/{root}/unfiltered_emg{idx}.txt",header=None)
             good_emg=emg.iloc[:,:11]
             good_emg.columns=['key','FSR1','FSR2','FSR3','FSR4','FSR5','FSR6','FSR7','FSR8','FSR9','FSR10']
 
@@ -86,6 +86,44 @@ def get_datapoints(data_dict:[{'root':str,'idx':[str]}],max_length=311):
     print()
     return datapoints
 
+def get_blanks(data_dict:[{'root':str,'idx':[str]}],max_length=311):
+    datapoints=[]
+    for folder in data_dict:
+        root=folder['root']
+        indices=folder['idx']
+        print(f"\nProcessing Folder: {root}",end='\t')
+        for idx in indices:
+            print(f"Index:{idx}",end='\t')
+            stim=pd.read_csv(f"data/{root}/stim{idx}.txt",header=None)
+            good_stim=stim.iloc[:,:7]
+            good_stim.columns=['key','Fing1','Fing2','Fing3','Fing4','Fing5','Fing6']
+            
+            emg=pd.read_csv(f"data/{root}/unfiltered_emg{idx}.txt",header=None)
+            good_emg=emg.iloc[:,:11]
+            good_emg.columns=['key','FSR1','FSR2','FSR3','FSR4','FSR5','FSR6','FSR7','FSR8','FSR9','FSR10']
+
+            
+            # https://stackoverflow.com/questions/21800169/python-pandas-get-index-of-rows-where-column-matches-certain-value
+            indices=np.where(good_stim.iloc[:,1:].sum(axis=1)==0.0)[0]
+            good_data=good_stim.iloc[list(indices)].copy(deep=True)
+            # https://stackoverflow.com/questions/29517072/add-column-to-dataframe-with-constant-value
+            good_data['Stim']=0
+            good_data=good_data.drop(columns=['Fing1','Fing2','Fing3','Fing4','Fing5','Fing6'])
+            good_data.sort_values('key',inplace=True)
+            
+            good_datas = [good_data.iloc[i:i+max_length,:] for i in range(0, len(good_data),max_length)]
+            
+            better_data=[]
+            # Merge in FSR Data
+            for data in good_datas:
+                better_data.append(data.merge(good_emg,how='inner',on=['key']))
+            
+            for data in better_data:
+                if len(data)==max_length:
+                    datapoints.append(data)
+    print()
+    return datapoints
+
 def get_datapoints_with_ffls(data_dict:[{'root':str,'idx':[str]}],max_length=311):
     datapoints=[]
     for folder in data_dict:
@@ -98,7 +136,7 @@ def get_datapoints_with_ffls(data_dict:[{'root':str,'idx':[str]}],max_length=311
             good_stim=stim.iloc[:,:7]
             good_stim.columns=['key','Fing1','Fing2','Fing3','Fing4','Fing5','Fing6']
             
-            emg=pd.read_csv(f"data/{root}/emg{idx}.txt",header=None)
+            emg=pd.read_csv(f"data/{root}/unfiltered_emg{idx}.txt",header=None)
             emg.columns=['key','FSR1','FSR2','FSR3','FSR4','FSR5','FSR6','FSR7','FSR8','FSR9','FSR10','FFLS1','FFLS2','FFLS3','FFLS4','FFLS5','FFLS6']
             fsr_data=emg.iloc[:,:11]
             ffls_data=emg.loc[:,['key','FFLS1','FFLS2','FFLS3','FFLS4','FFLS5','FFLS6']]
@@ -139,6 +177,25 @@ def get_datapoints_with_ffls(data_dict:[{'root':str,'idx':[str]}],max_length=311
 def make_dataset(datapoints:[pd.DataFrame])->pd.DataFrame:
     processed_datadicts=[]
     for data in datapoints:
+        stim=data['Stim'][0]
+        array_2D=data.loc[:,['FSR1','FSR2','FSR3','FSR4','FSR5','FSR6','FSR7','FSR8','FSR9','FSR10']].to_numpy().transpose().flatten().tolist()
+        processed_datadicts.append({
+            'stim':stim,
+            'data':' '.join(str(x) for x in array_2D)
+        })
+    dataset=pd.DataFrame(processed_datadicts)
+    return dataset
+
+def make_dataset_with_blanks(datapoints:[pd.DataFrame],datapoints_blank:[pd.DataFrame])->pd.DataFrame:
+    processed_datadicts=[]
+    for data in datapoints:
+        stim=data['Stim'][0]
+        array_2D=data.loc[:,['FSR1','FSR2','FSR3','FSR4','FSR5','FSR6','FSR7','FSR8','FSR9','FSR10']].to_numpy().transpose().flatten().tolist()
+        processed_datadicts.append({
+            'stim':stim,
+            'data':' '.join(str(x) for x in array_2D)
+        })
+    for data in datapoints_blank:
         stim=data['Stim'][0]
         array_2D=data.loc[:,['FSR1','FSR2','FSR3','FSR4','FSR5','FSR6','FSR7','FSR8','FSR9','FSR10']].to_numpy().transpose().flatten().tolist()
         processed_datadicts.append({
