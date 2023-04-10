@@ -1,6 +1,15 @@
 import numpy as np
 import pandas as pd
 
+def _normalize(data):
+    return (data-np.min(data))/(np.max(data)-np.min(data))
+
+def _standardize(array):
+  mean = np.mean(array, axis=0)
+  std = np.std(array, axis=0)
+  array = (array - mean) / std
+  return array
+
 def get_mins(data_dict:[{'root':str,'idx':[str]}])->[{'root':str,'idx':str,'min':int}]:
     mins=[]
     for folder in data_dict:
@@ -36,91 +45,90 @@ def get_mins(data_dict:[{'root':str,'idx':[str]}])->[{'root':str,'idx':str,'min'
 def get_min(mins:[{'root':str,'idx':str,'min':int}])->int:
     return min([x['min'] for x in mins])
 
-def get_datapoints(data_dict:[{'root':str,'idx':[str]}],max_length=311):
+def get_datapoints():
     datapoints=[]
-    for folder in data_dict:
-        root=folder['root']
-        indices=folder['idx']
-        print(f"\nProcessing Folder: {root}",end='\t')
-        for idx in indices:
-            print(f"Index:{idx}",end='\t')
-            stim=pd.read_csv(f"data/{root}/stim{idx}.txt",header=None)
-            good_stim=stim.iloc[:,:7]
-            good_stim.columns=['key','Fing1','Fing2','Fing3','Fing4','Fing5','Fing6']
             
-            emg=pd.read_csv(f"data/{root}/unfiltered_emg{idx}.txt",header=None)
-            good_emg=emg.iloc[:,:11]
-            good_emg.columns=['key','FSR1','FSR2','FSR3','FSR4','FSR5','FSR6','FSR7','FSR8','FSR9','FSR10']
-
-            
-            data=[]
-            for i in range(1,7):
-                # https://stackoverflow.com/questions/21800169/python-pandas-get-index-of-rows-where-column-matches-certain-value
-                indices=np.where(good_stim[f'Fing{i}']>0.0)[0]
-                temp_data=good_stim.iloc[list(indices)].copy(deep=True)
-                # https://stackoverflow.com/questions/29517072/add-column-to-dataframe-with-constant-value
-                temp_data['Stim']=i
-                temp_data=temp_data.drop(columns=['Fing1','Fing2','Fing3','Fing4','Fing5','Fing6'])
-                data.append(temp_data)
-            
-            good_data=pd.concat(data)
-            good_data.sort_values('key',inplace=True)
-            
-            good_data['group'] = good_data['Stim'].ne(good_data['Stim'].shift()).cumsum()
-            grouped_data = good_data.groupby('group')
-            good_datas = []
-            for name, data in grouped_data:
-                good_datas.append(data.drop(columns=['group']))
-            
-            better_data=[]
-            # Merge in FSR Data
-            for data in good_datas:
-                better_data.append(data.merge(good_emg,how='inner',on=['key']))
-            
-            if max_length!=None:
-                for data in better_data:
-                    datapoints.append(data.iloc[:max_length,:])
-            else:
-                for data in better_data:
-                    datapoints.append(data)
+    dataset=pd.read_csv(f"combined/emg_fsr_data.csv",header=0)
+    ffls_data=dataset.iloc[:,21:]
+    ffls_data.columns=['Fing1','Fing2','Fing3','Fing4','Fing5','Fing6']
+    
+    good_fsr=dataset.iloc[:,:11]
+    good_fsr.columns=['key','FSR1','FSR2','FSR3','FSR4','FSR5','FSR6','FSR7','FSR8','FSR9','FSR10']
+    ffls_data['key']=good_fsr['key']
+    ffls_data=ffls_data[['key','Fing1','Fing2','Fing3','Fing4','Fing5','Fing6']]
+    ffls_standardized = _standardize(ffls_data)
+    ffls_normalized = _normalize(ffls_data)
+    thresholds = [x-0.03 for x in ffls_normalized.mean()]
+    data=[]
+    for i in range(1,7):
+        # https://stackoverflow.com/questions/21800169/python-pandas-get-index-of-rows-where-column-matches-certain-value
+        indices=np.where(ffls_normalized[f'Fing{i}']<thresholds[i])[0]
+        temp_data=ffls_data.iloc[list(indices)].copy(deep=True)
+        # https://stackoverflow.com/questions/29517072/add-column-to-dataframe-with-constant-value
+        temp_data['Stim']=i
+        temp_data=temp_data.drop(columns=['Fing1','Fing2','Fing3','Fing4','Fing5','Fing6'])
+        data.append(temp_data)
+    
+    good_data=pd.concat(data)
+    good_data.sort_values('key',inplace=True)
+    print("Grouping")
+    good_data['group'] = good_data['Stim'].ne(good_data['Stim'].shift()).cumsum()
+    grouped_data = good_data.groupby('group')
+    good_datas = []
+    for name, data in grouped_data:
+        good_datas.append(data.drop(columns=['group']))
+    
+    lengths = [data.shape[0] for name,data in grouped_data]
+    lengths = [x for x in lengths if x>=100]
+    max_length = min(lengths)
+    print(max_length)
+    better_data=[]
+    # Merge in FSR Data
+    for data in good_datas:
+        better_data.append(data.merge(good_fsr,how='inner',on=['key']))
+    # return
+    for data in better_data:
+        datapoints.append(data.iloc[:max_length,:])
+    
     print()
     return datapoints
 
-def get_blanks(data_dict:[{'root':str,'idx':[str]}],max_length=311):
+def get_blanks(max_length=90):
     datapoints=[]
-    for folder in data_dict:
-        root=folder['root']
-        indices=folder['idx']
-        print(f"\nProcessing Folder: {root}",end='\t')
-        for idx in indices:
-            print(f"Index:{idx}",end='\t')
-            stim=pd.read_csv(f"data/{root}/stim{idx}.txt",header=None)
-            good_stim=stim.iloc[:,:7]
-            good_stim.columns=['key','Fing1','Fing2','Fing3','Fing4','Fing5','Fing6']
             
-            emg=pd.read_csv(f"data/{root}/unfiltered_emg{idx}.txt",header=None)
-            good_emg=emg.iloc[:,:11]
-            good_emg.columns=['key','FSR1','FSR2','FSR3','FSR4','FSR5','FSR6','FSR7','FSR8','FSR9','FSR10']
-
-            
-            # https://stackoverflow.com/questions/21800169/python-pandas-get-index-of-rows-where-column-matches-certain-value
-            indices=np.where(good_stim.iloc[:,1:].sum(axis=1)==0.0)[0]
-            good_data=good_stim.iloc[list(indices)].copy(deep=True)
-            # https://stackoverflow.com/questions/29517072/add-column-to-dataframe-with-constant-value
-            good_data['Stim']=0
-            good_data=good_data.drop(columns=['Fing1','Fing2','Fing3','Fing4','Fing5','Fing6'])
-            good_data.sort_values('key',inplace=True)
-            
-            good_datas = [good_data.iloc[i:i+max_length,:] for i in range(0, len(good_data),max_length)]
-            
-            better_data=[]
-            # Merge in FSR Data
-            for data in good_datas:
-                better_data.append(data.merge(good_emg,how='inner',on=['key']))
-            
-            for data in better_data:
-                if len(data)==max_length:
-                    datapoints.append(data)
+    dataset=pd.read_csv(f"combined/emg_fsr_data.csv",header=0)
+    ffls_data=dataset.iloc[:,21:]
+    ffls_data.columns=['Fing1','Fing2','Fing3','Fing4','Fing5','Fing6']
+    
+    good_fsr=dataset.iloc[:,:11]
+    good_fsr.columns=['key','FSR1','FSR2','FSR3','FSR4','FSR5','FSR6','FSR7','FSR8','FSR9','FSR10']
+    ffls_data['key']=good_fsr['key']
+    ffls_data=ffls_data[['key','Fing1','Fing2','Fing3','Fing4','Fing5','Fing6']]
+    ffls_standardized = _standardize(ffls_data)
+    ffls_normalized = _normalize(ffls_data)
+    thresholds = [x-0.03 for x in ffls_normalized.mean()]
+    all_sets=[]
+    for i in range(1,7):
+        # https://stackoverflow.com/questions/21800169/python-pandas-get-index-of-rows-where-column-matches-certain-value
+        indices=set(np.where(ffls_normalized[f'Fing{i}']>thresholds[i])[0])
+        all_sets.append(indices)
+    indices_intersection = set.intersection(*all_sets)
+    good_data=ffls_data.iloc[list(indices_intersection)].copy(deep=True)
+    # https://stackoverflow.com/questions/29517072/add-column-to-dataframe-with-constant-value
+    good_data['Stim']=0
+    good_data=good_data.drop(columns=['Fing1','Fing2','Fing3','Fing4','Fing5','Fing6'])
+    good_data.sort_values('key',inplace=True)
+    
+    good_datas = [good_data.iloc[i:i+max_length,:] for i in range(0, len(good_data),max_length)]
+    
+    better_data=[]
+    # Merge in FSR Data
+    for data in good_datas:
+        better_data.append(data.merge(good_fsr,how='inner',on=['key']))
+    
+    for data in better_data:
+        if len(data)==max_length:
+            datapoints.append(data)
     print()
     return datapoints
 
@@ -218,3 +226,16 @@ def make_dataset_with_ffls(datapoints:[pd.DataFrame])->pd.DataFrame:
         })
     dataset=pd.DataFrame(processed_datadicts)
     return dataset
+
+datapoints = get_datapoints()
+print(len(datapoints))
+blanks = get_blanks(105)
+print(len(blanks))
+generated_dataset = make_dataset(datapoints)
+print(generated_dataset.head())
+generated_dataset.to_csv("combined/new_dataset.csv")
+print("Saved to new_dataset.csv")
+generated_dataset = make_dataset_with_blanks(datapoints,blanks)
+print(generated_dataset.head())
+generated_dataset.to_csv("combined/new_dataset_with_blanks.csv")
+print("Saved to new_dataset_with_blanks.csv")
