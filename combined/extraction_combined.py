@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 def _normalize(data):
-    return (data-np.min(data))/(np.max(data)-np.min(data))
+    return (data-data.min())/(data.max()-data.min())
 
 def _standardize(array):
   mean = np.mean(array, axis=0)
@@ -47,23 +47,37 @@ def get_min(mins:[{'root':str,'idx':str,'min':int}])->int:
 
 def get_datapoints():
     datapoints=[]
-            
+    # Read Dataset
     dataset=pd.read_csv(f"combined/emg_fsr_data.csv",header=0)
-    ffls_data=dataset.iloc[:,21:]
-    ffls_data.columns=['Fing1','Fing2','Fing3','Fing4','Fing5','Fing6']
     
+    # FSR Data is first 11 columns of Dataset
     good_fsr=dataset.iloc[:,:11]
     good_fsr.columns=['key','FSR1','FSR2','FSR3','FSR4','FSR5','FSR6','FSR7','FSR8','FSR9','FSR10']
-    ffls_data['key']=good_fsr['key']
-    ffls_data=ffls_data[['key','Fing1','Fing2','Fing3','Fing4','Fing5','Fing6']]
-    ffls_standardized = _standardize(ffls_data)
+    
+    # FFLS Data is last 6 columns
+    ffls_data=dataset.iloc[:,21:]
+    mov_avg_ffls = ffls_data.rolling(20).mean()
+    ffls_data = mov_avg_ffls.fillna(0.0)
+    ffls_data.columns=['Fing1','Fing2','Fing3','Fing4','Fing5','Fing6'] # Renaming Columns
+    
+    # Standardize and Normalize FFLS Data
+    ffls_standardized = _standardize(ffls_data) 
     ffls_normalized = _normalize(ffls_data)
+    
+    # Copying Key column to FFLS Data
+    ffls_normalized['key']=good_fsr['key']
+    # Reordering columns
+    ffls_normalized=ffls_normalized[['key','Fing1','Fing2','Fing3','Fing4','Fing5','Fing6']]
+    # Calculate Thresholds
     thresholds = [x-0.03 for x in ffls_normalized.mean()]
+    
     data=[]
     for i in range(1,7):
         # https://stackoverflow.com/questions/21800169/python-pandas-get-index-of-rows-where-column-matches-certain-value
+        # Find where Finger is pressed
         indices=np.where(ffls_normalized[f'Fing{i}']<thresholds[i])[0]
-        temp_data=ffls_data.iloc[list(indices)].copy(deep=True)
+        # Isolate those samples
+        temp_data=ffls_normalized.iloc[list(indices)].copy(deep=True)
         # https://stackoverflow.com/questions/29517072/add-column-to-dataframe-with-constant-value
         temp_data['Stim']=i
         temp_data=temp_data.drop(columns=['Fing1','Fing2','Fing3','Fing4','Fing5','Fing6'])
@@ -81,15 +95,21 @@ def get_datapoints():
     lengths = [data.shape[0] for name,data in grouped_data]
     lengths = [x for x in lengths if x>=100]
     max_length = min(lengths)
-    print(max_length)
-    better_data=[]
+    if max_length%2 !=0:
+        max_length-=1
+    print(f"Max Length: {max_length} Datapoints above: {len([x for x in lengths if x>=max_length])}")
+    
     # Merge in FSR Data
     for data in good_datas:
-        better_data.append(data.merge(good_fsr,how='inner',on=['key']))
-    # return
-    for data in better_data:
-        datapoints.append(data.iloc[:max_length,:])
-    
+        if len(data)>=max_length:
+            temp_data = data.iloc[:max_length,:].merge(good_fsr,how='inner',on=['key'])
+            if temp_data.shape != (max_length,12):
+                input(f"{temp_data.shape} cont?")
+            datapoints.append(temp_data)
+    # # return
+    # for data in better_data:
+    #     if len(data)>=max_length:
+    #         datapoints.append(data.iloc[:max_length,:])
     print()
     return datapoints
 
@@ -121,14 +141,13 @@ def get_blanks(max_length=90):
     
     good_datas = [good_data.iloc[i:i+max_length,:] for i in range(0, len(good_data),max_length)]
     
-    better_data=[]
     # Merge in FSR Data
     for data in good_datas:
-        better_data.append(data.merge(good_fsr,how='inner',on=['key']))
-    
-    for data in better_data:
         if len(data)==max_length:
-            datapoints.append(data)
+            temp_data = data.iloc[:max_length,:].merge(good_fsr,how='inner',on=['key'])
+            if temp_data.shape != (max_length,12):
+                input(f"{temp_data.shape} cont?")
+            datapoints.append(temp_data)
     print()
     return datapoints
 
@@ -186,6 +205,7 @@ def make_dataset(datapoints:[pd.DataFrame])->pd.DataFrame:
     processed_datadicts=[]
     for data in datapoints:
         stim=data['Stim'][0]
+        input(f"{data.iloc[:,2:].shape} cont?")
         array_2D=data.loc[:,['FSR1','FSR2','FSR3','FSR4','FSR5','FSR6','FSR7','FSR8','FSR9','FSR10']].to_numpy().transpose().flatten().tolist()
         processed_datadicts.append({
             'stim':stim,
@@ -227,14 +247,21 @@ def make_dataset_with_ffls(datapoints:[pd.DataFrame])->pd.DataFrame:
     dataset=pd.DataFrame(processed_datadicts)
     return dataset
 
+print("Collecting Datapoints")
 datapoints = get_datapoints()
-print(len(datapoints))
-blanks = get_blanks(105)
-print(len(blanks))
+print(f"No. of Datapoints: {len(datapoints)}\n")
+blank_length = int(input("Enter max_length: "))
+print("Collecting Blanks")
+blanks = get_blanks(blank_length)
+print(f"No. of Blanks: {len(blanks)}\n")
+
+print("Making Dataset - Without Blanks")
 generated_dataset = make_dataset(datapoints)
 print(generated_dataset.head())
 generated_dataset.to_csv("combined/new_dataset.csv")
-print("Saved to new_dataset.csv")
+print("Saved to new_dataset.csv\n")
+
+print("Making Dataset - With Blanks")
 generated_dataset = make_dataset_with_blanks(datapoints,blanks)
 print(generated_dataset.head())
 generated_dataset.to_csv("combined/new_dataset_with_blanks.csv")
