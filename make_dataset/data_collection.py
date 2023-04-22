@@ -6,8 +6,8 @@ from datetime import datetime
 import keyboard
 import threading
 
-ser = serial.Serial('COM_PORT', 9600)  # Replace 'COM_PORT' with the appropriate port for your Arduino
-csv_file = 'data.csv'
+ser = serial.Serial('COM7', 9600)  # Replace 'COM_PORT' with the appropriate port for your Arduino
+csv_file = 'make_dataset/data.csv'
 pressed_key = 0
 stop_program = False
 idx = 0
@@ -24,7 +24,7 @@ def check_keypress():
         else:
             pressed_key = 0
 
-def main(delay_ms=100):
+def main():
     global pressed_key, stop_program, idx
     key_thread = threading.Thread(target=check_keypress)
     key_thread.daemon = True
@@ -32,16 +32,17 @@ def main(delay_ms=100):
 
     with open(csv_file, 'a', newline='') as file:
         writer = csv.writer(file)
-    while not stop_program:
-        if ser.inWaiting():
-            sensor_data = ser.readline().decode().strip()
-            idx += 1
-            timestamp = datetime.now().strftime('%F %S.%f')[:-4]
-            key = pressed_key if pressed_key != 'esc' else 0
-            data_point =[idx] + [timestamp] + sensor_data.split(',') + [key]
-            print(data_point)
-            writer.writerow(data_point)
-            time.sleep(delay_ms/1000)
+        print("Writing")
+        while not stop_program:
+            if ser.inWaiting():
+                sensor_data = ser.readline().decode().strip()
+                idx += 1
+                # timestamp = datetime.now().strftime('%F %S.%f')[:-4]
+                key = pressed_key if pressed_key != 'esc' else 0
+                data_point =[idx] + sensor_data.split(',') + [key]
+                writer.writerow(data_point)
+        print("Stopping")
+    print(f"Saved at {csv_file}")
 
 if __name__ == "__main__":
     main()
