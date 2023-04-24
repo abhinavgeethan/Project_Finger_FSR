@@ -1,12 +1,14 @@
 import torch
 import numpy as _np
-import pandas as _pd
 
-def to_CNN_reshaped_tensor(test_input:_pd.DataFrame,NUM_TIMESTEPS:int,NUM_SENSORS:int)->torch.Tensor:
-    return torch.tensor(test_input.reshape(len(test_input),1,NUM_TIMESTEPS,NUM_SENSORS))
+NUM_TIMESTEPS = 0
+NUM_SENSORS = 0
 
-def to_LSTM_reshaped_tensor(test_input:_pd.DataFrame,NUM_TIMESTEPS:int,NUM_SENSORS:int)->torch.Tensor:
-    return torch.tensor(test_input.reshape((len(test_input),NUM_TIMESTEPS,NUM_SENSORS)))
+def to_CNN_reshaped_tensor(test_input:_np.ndarray,NUM_TIMESTEPS:int,NUM_SENSORS:int)->torch.Tensor:
+    return torch.tensor(test_input.reshape(1,NUM_TIMESTEPS,NUM_SENSORS))
+
+def to_LSTM_reshaped_tensor(test_input:_np.ndarray,NUM_TIMESTEPS:int,NUM_SENSORS:int)->torch.Tensor:
+    return torch.tensor(test_input.reshape(NUM_TIMESTEPS,NUM_SENSORS))
 
 def _normalize(data):
     return (data-_np.min(data))/(_np.max(data)-_np.min(data))
@@ -17,12 +19,23 @@ def _standardize(array):
   array = (array - mean) / std
   return array
 
-def preprocess(data_list:list)->_pd.DataFrame:
-    df = _pd.DataFrame(data_list,columns=["FSR1","FSR2","FSR3","FSR4","FSR5","FSR6"])
-    print(df.shape)
-    df = df.apply(_normalize)
+def _load_and_normalize(data):
+    split_data=[]
+    for row in data:
+        row=_np.array(row.split(',')).astype('float32')
+        row = _normalize(row)
+        split_data.append(row)
+    data=_np.reshape(split_data,(NUM_TIMESTEPS,NUM_SENSORS))
+    return data
+
+def preprocess(data_list:list,num_timesteps:int,num_sensors:int)->_np.ndarray:
+    global NUM_TIMESTEPS, NUM_SENSORS
+    NUM_TIMESTEPS = num_timesteps
+    NUM_SENSORS = num_sensors
+    df = _load_and_normalize(data_list)
+    df = _np.stack(df,axis=0)
     df = _standardize(df)
     return df
 
 def torch_argmax(tensor:torch.Tensor)->int:
-    return torch.argmax(tensor.unsqueeze(0))
+    return torch.argmax(tensor.unsqueeze(0)).item()
