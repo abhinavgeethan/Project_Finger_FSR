@@ -10,14 +10,14 @@ NUM_TIMESTEPS = 64
 
 print("Loading CNN Model")
 CNN_model = CNNModel(num_classes=NUM_CLASSES)
-CNN_model.load_state_dict(torch.load("demo/CNN_model.pth",map_location=torch.device('cpu')))
+CNN_model.load_state_dict(torch.load("demo/CNN_Model.pth",map_location=torch.device('cpu')))
 print("Successfully Loaded CNN Model")
 print("Loading LSTM Model")
 LSTM_model = LSTMModel(num_classes=NUM_CLASSES)
-LSTM_model.load_state_dict(torch.load("demo/LSTM_model.pth",map_location=torch.device('cpu')))
+LSTM_model.load_state_dict(torch.load("demo/LSTM_Model.pth",map_location=torch.device('cpu')))
 print("Successfully Loaded LSTM Model")
 # Establish serial connection with the Arduino
-ser = serial.Serial('COM7', 9600)
+ser = serial.Serial('COM9', 9600)
 print("Connected to Arduino",flush=True)
 
 prediction_lut = {0:"None", 1:"Thumb", 2:"Index", 3:"Middle", 4:"Ring", 5:"Little"}
